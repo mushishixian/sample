@@ -4,13 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Mail;
 
 class UsersController extends Controller
 {
     public function __construct()
     {
         $this->middleware('auth', [
-            'except' => ['show', 'create', 'store'],
+            'except' => ['show', 'create', 'store', 'index', 'confirmEmail']
         ]);
 
         $this->middleware('guest', [
@@ -39,17 +40,45 @@ class UsersController extends Controller
     public function store(Request $request)
     {
         $this->validate($request, [
-            'name'     => 'required|max:50',
-            'email'    => 'required|email|unique:users|max:60',
+            'name' => 'required|max:50',
+            'email' => 'required|email|unique:users|max:60',
             'password' => 'required|confirmed|min:6',
         ]);
         $user = User::create([
-            'name'     => $request->name,
-            'email'    => $request->email,
+            'name' => $request->name,
+            'email' => $request->email,
             'password' => bcrypt($request->password),
         ]);
+        $this->sendEmailConfirmationTo($user);
+        session()->flash('success', '验证邮件已经发送到你的邮箱.');
+
+        return redirect('/');
+    }
+
+    protected function sendEmailConfirmationTo($user)
+    {
+        $view = 'emails.confirm';
+        $data = compact('user');
+        $from = 'aufree@yousails.com';
+        $name = 'Aufree';
+        $to = $user->email;
+        $subject = "感谢注册 Sample 应用！请确认你的邮箱。";
+
+        Mail::send($view, $data, function ($message) use ($from, $name, $to, $subject) {
+            $message->from($from, $name)->to($to)->subject($subject);
+        });
+    }
+
+    public function confirmEmail($token)
+    {
+        $user = User::where('activation_token', $token)->firstOrFail();
+
+        $user->activated = true;
+        $user->activation_token = null;
+        $user->save();
+
         \Auth::login($user);
-        session()->flash('success', '欢迎,你即将在这里开始你的旅程!');
+        session()->flash('success', '恭喜你，激活成功！');
 
         return redirect()->route('users.show', [$user]);
     }
@@ -64,7 +93,7 @@ class UsersController extends Controller
     public function update(User $user, Request $request)
     {
         $this->validate($request, [
-            'name'     => 'required|max:50',
+            'name' => 'required|max:50',
             'password' => 'nullable|confirmed|min:6',
         ]);
 

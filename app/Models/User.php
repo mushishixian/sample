@@ -51,6 +51,43 @@ class User extends Authenticatable
 
     public function feed()
     {
-        return $this->statuses()->orderBy('created_at', 'desc');
+        $userIds = \Auth::user()->followings->pluck('id');
+        $userIds[] = \Auth::user()->id;
+
+        return Status::whereIn('user_id', $userIds)
+            ->with('user')
+            ->orderBy('created_at', 'desc');
+    }
+
+    public function followers()
+    {
+        return $this->belongsToMany(User::class, 'followers', 'user_id', 'follower_id');
+    }
+
+    public function followings()
+    {
+        return $this->belongsToMany(User::class, 'followers', 'follower_id', 'user_id');
+    }
+
+    public function follow($userIds)
+    {
+        //判断是不是数据,不是的话转换成数组
+        if (!\is_array($userIds)) {
+            $userIds = compact('userIds');
+        }
+        $this->followings()->sync($userIds, false);
+    }
+
+    public function unfollow($userIds)
+    {
+        if (!\is_array($userIds)) {
+            $userIds = compact('userIds');
+        }
+        $this->followings()->detach($userIds);
+    }
+
+    public function isFollowing($userId)
+    {
+        return $this->followings->contains($userId);
     }
 }
